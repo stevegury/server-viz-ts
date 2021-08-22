@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+     <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+     <title>Load shedding</title>
+     <style>
+         body,
+         html {
+             margin: 0;
+             padding: 0;
+         }
+
+         canvas {
+             background-color: #ffffff;
+         }
+     </style>
+ </head>
+
+ <body>
+     <canvas />
+     <!-- <script src="./Scene.js"></script> -->
+     <script src="modules/Scene.js"></script>
+     <script >
+         let canvas = document.querySelector('canvas');
+         let ctx = canvas.getContext('2d');
+
+         canvas.width = window.innerWidth;
+         canvas.height = window.innerHeight;
+         const w = canvas.width;
+         const h = canvas.height;
+
+         let vertical_layer = new Layer(canvas, true);
+         let servers = []
+         for (let i=0; i<1; i++) {
+             const server = new Server()
+             servers.push(server)
+             vertical_layer.add(server);
+         }
+         
+         let vertical_layer2 = new Layer(canvas, true);
+         let squares = []
+         for (let i=0; i<3; i++) {
+             const square = new Server()
+             vertical_layer2.add(square);
+             squares.push(square)
+         }
+
+         let horizontal_layer = new Layer(canvas, false);
+         horizontal_layer.add(vertical_layer);
+         horizontal_layer.add(vertical_layer2);
+
+         let scene = new Scene(window, canvas);
+         scene.add(horizontal_layer);
+
+         for (const server of servers) {
+             for (const square of squares) {
+                 scene.add(new Connection(server, square))
+             }
+         }
+
+         scene.loop();
+     </script>
+ </body>
+ </html>
