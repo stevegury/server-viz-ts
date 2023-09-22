@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+     <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+     <title>Load shedding</title>
+     <style>
+         body,
+         html {
+             margin: 0;
+             padding: 0;
+         }
+
+         canvas {
+             background-color: #ffffff;
+         }
+     </style>
+ </head>
+
+ <body>
+     <canvas />
+     <!-- <script src="./Scene.js"></script> -->
+     <!-- <script src="modules/Scene.js"></script> -->
+     <script src="lodash.js"> </script>
+     <script src="main.js"></script>
+     <script >
+        let canvas = document.querySelector('canvas');
+        let ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const w = canvas.width;
+        const h = canvas.height;
+
+        const scene = new Scene(window, canvas);
+
+        config.serverProcessingLatencyMs = 500;
+        config.clientRps = 0.5;
+
+        // demo of overwhelming the server via mouse clicks
+        // load-test demonstrated that it can handle 2 RPS
+        function next0() {
+            console.log("increasing client RPS to match server capacity");
+            changeRps(2);
+        }
+
+        function next2() {
+            console.log("increasing # of servers to satisfy client RPS");
+            addServer(); addServer(); addServer(); addServer();
+            changeRps(9);
+            // hist.clear();
+        }
+
+        let index = 0;
+        const steps = [next0, next2];
+        function next() {
+            if (index >= steps.length) {
+                console.log("no more steps!");
+                return;
+            }
+            steps[index]();
+            index++;
+        }
+
+        setup(scene, 1, 1);
+        scene.loop();
+     </script>
+ </body>
+ </html>

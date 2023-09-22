@@ -274,7 +274,7 @@ var Layer = /** @class */ (function (_super) {
         catch (e_1_1) { e_1 = { error: e_1_1 }; }
         finally {
             try {
-                if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
             }
             finally { if (e_1) throw e_1.error; }
         }
@@ -297,7 +297,7 @@ var Layer = /** @class */ (function (_super) {
         catch (e_2_1) { e_2 = { error: e_2_1 }; }
         finally {
             try {
-                if (_e && !_e.done && (_a = _d["return"])) _a.call(_d);
+                if (_e && !_e.done && (_a = _d.return)) _a.call(_d);
             }
             finally { if (e_2) throw e_2.error; }
         }
@@ -336,7 +336,7 @@ var Layer = /** @class */ (function (_super) {
         catch (e_3_1) { e_3 = { error: e_3_1 }; }
         finally {
             try {
-                if (_g && !_g.done && (_b = _f["return"])) _b.call(_f);
+                if (_g && !_g.done && (_b = _f.return)) _b.call(_f);
             }
             finally { if (e_3) throw e_3.error; }
         }
@@ -349,7 +349,7 @@ var Layer = /** @class */ (function (_super) {
         catch (e_4_1) { e_4 = { error: e_4_1 }; }
         finally {
             try {
-                if (_j && !_j.done && (_c = _h["return"])) _c.call(_h);
+                if (_j && !_j.done && (_c = _h.return)) _c.call(_h);
             }
             finally { if (e_4) throw e_4.error; }
         }
@@ -369,7 +369,7 @@ var Layer = /** @class */ (function (_super) {
         catch (e_5_1) { e_5 = { error: e_5_1 }; }
         finally {
             try {
-                if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
             }
             finally { if (e_5) throw e_5.error; }
         }
@@ -379,7 +379,7 @@ var Layer = /** @class */ (function (_super) {
         this.entities.add(entity);
     };
     Layer.prototype.remove = function (entity) {
-        this.entities["delete"](entity);
+        this.entities.delete(entity);
     };
     Layer.prototype.pop = function () {
         var e_6, _a;
@@ -395,13 +395,328 @@ var Layer = /** @class */ (function (_super) {
         catch (e_6_1) { e_6 = { error: e_6_1 }; }
         finally {
             try {
-                if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
             }
             finally { if (e_6) throw e_6.error; }
         }
         return res;
     };
     return Layer;
+}(MoveableEntity));
+var Histogram = /** @class */ (function () {
+    function Histogram(bucketSize, maxValue) {
+        this.bucketSize = bucketSize;
+        var size = Math.floor(maxValue / bucketSize);
+        this.max = size * bucketSize;
+        this.buffer = new Array(size);
+        for (var i = 0; i < size; i++) {
+            this.buffer[i] = 0;
+        }
+        this.maxCount = 0;
+        this.maxValue = 0;
+    }
+    Histogram.prototype.add = function (x) {
+        if (x > this.max) {
+            return;
+        }
+        var i = Math.floor(x / this.bucketSize);
+        this.buffer[i] = this.buffer[i] + 1;
+        this.maxCount = Math.max(this.maxCount, this.buffer[i]);
+        this.maxValue = Math.max(this.maxValue, i);
+    };
+    Histogram.prototype.clear = function () {
+        for (var i = 0; i < this.buffer.length; i++) {
+            this.buffer[i] = 0;
+        }
+        this.maxCount = 0;
+        this.maxValue = 0;
+    };
+    Histogram.prototype.merge = function (other) {
+        var result = new Histogram(this.bucketSize, this.max);
+        for (var i = 0; i < result.buffer.length; i++) {
+            result.buffer[i] = this.buffer[i] + other.buffer[i];
+        }
+        return result;
+    };
+    return Histogram;
+}());
+var Dimension = /** @class */ (function () {
+    function Dimension() {
+    }
+    return Dimension;
+}());
+var WindowHistogram = /** @class */ (function (_super) {
+    __extends(WindowHistogram, _super);
+    function WindowHistogram(w, h, windowMs, position, dimension) {
+        var _this = _super.call(this, w, h) || this;
+        _this.clock = Date.now;
+        // super(scene, opts.position.x, opts.position.y);
+        // histogramFactory, count, windowMs, position, dimension, clock
+        _this.histograms = [];
+        var count = 10;
+        for (var i = 0; i < count; i++) {
+            _this.histograms.push(new Histogram(10, 12));
+        }
+        _this.windowMs = windowMs;
+        // this.clock = opts.clock || Date.now;
+        _this.count = count;
+        _this.lastIndex = Math.floor(_this.clock() / _this.windowMs);
+        _this.position = position;
+        _this.dimension = dimension;
+        _this.p99 = 0;
+        return _this;
+    }
+    WindowHistogram.prototype.add = function (x) {
+        if (isNaN(x)) {
+            return;
+        }
+        var t = this.clock();
+        var index = Math.floor(t / this.windowMs);
+        var n = this.histograms.length;
+        if (index !== this.lastIndex) {
+            for (var j = this.lastIndex + 1; j <= index; j++) {
+                var h = this.histograms[j % n];
+                h.clear();
+            }
+            this.lastIndex = index;
+        }
+        var i = (index % n) >> 0;
+        this.histograms[i].add(x);
+    };
+    WindowHistogram.prototype.maxIndividualCount = function () {
+        var count = 0;
+        for (var i = 0; i < this.histograms.length; i++) {
+            count = Math.max(count, this.histograms[i].maxCount);
+        }
+        return count;
+    };
+    WindowHistogram.prototype.maxCount = function () {
+        var count = 0;
+        for (var i = 0; i < this.histograms[0].buffer.length; i++) {
+            count = Math.max(count, this.buffer(i) || 0);
+        }
+        return count || 0;
+    };
+    WindowHistogram.prototype.maxValue = function () {
+        var value = 0;
+        for (var i = 0; i < this.histograms.length; i++) {
+            value = Math.max(value, this.histograms[i].maxValue);
+        }
+        return value;
+    };
+    WindowHistogram.prototype.clear = function () {
+        for (var i = 0; i < this.histograms.length; i++) {
+            this.histograms[i].clear();
+        }
+    };
+    WindowHistogram.prototype.buffer = function (index) {
+        var count = 0;
+        for (var i = 0; i < this.histograms.length; i++) {
+            var histo = this.histograms[i];
+            count = count + histo.buffer[index];
+        }
+        return count;
+    };
+    WindowHistogram.prototype.data = function () {
+        var n = this.maxValue() + 1;
+        var result = new Array(n);
+        for (var i = 0; i < result.length; i++) {
+            result[i] = this.buffer(i);
+        }
+        return result;
+    };
+    WindowHistogram.prototype.scaleX = function (data, width, minWidth) {
+        var n = Math.floor(width / minWidth);
+        var scaledData = new Array(n);
+        var targetCredit = data.length / n;
+        var j = 0, i = 0;
+        var credit = 0;
+        var sum = 0;
+        while (i < data.length) {
+            credit++;
+            if (credit >= targetCredit) {
+                while (credit >= targetCredit) {
+                    credit = credit - targetCredit;
+                    if (targetCredit < 1 - credit) {
+                        scaledData[j] = sum + targetCredit * data[i];
+                    }
+                    else {
+                        scaledData[j] = sum + (1 - credit) * data[i];
+                        sum = credit * data[i];
+                    }
+                    j++;
+                }
+            }
+            else {
+                sum = sum + data[i];
+            }
+            i++;
+            if (i === data.length) {
+                scaledData[j] = sum;
+                if (scaledData[j] < 0) {
+                    debugger;
+                }
+            }
+        }
+        return scaledData;
+    };
+    WindowHistogram.prototype.scaleY = function (data, height) {
+        var e_7, _a, e_8, _b;
+        var maxCount = 0;
+        try {
+            for (var data_1 = __values(data), data_1_1 = data_1.next(); !data_1_1.done; data_1_1 = data_1.next()) {
+                var x = data_1_1.value;
+                maxCount = Math.max(maxCount, x);
+            }
+        }
+        catch (e_7_1) { e_7 = { error: e_7_1 }; }
+        finally {
+            try {
+                if (data_1_1 && !data_1_1.done && (_a = data_1.return)) _a.call(data_1);
+            }
+            finally { if (e_7) throw e_7.error; }
+        }
+        var hFactor = height / maxCount;
+        var res = Array();
+        try {
+            for (var data_2 = __values(data), data_2_1 = data_2.next(); !data_2_1.done; data_2_1 = data_2.next()) {
+                var x = data_2_1.value;
+                res.push(x * hFactor);
+            }
+        }
+        catch (e_8_1) { e_8 = { error: e_8_1 }; }
+        finally {
+            try {
+                if (data_2_1 && !data_2_1.done && (_b = data_2.return)) _b.call(data_2);
+            }
+            finally { if (e_8) throw e_8.error; }
+        }
+        return res;
+    };
+    WindowHistogram.prototype.scale = function (data, dimension) {
+        var e_9, _a;
+        var scaledXData = this.scaleX(data, dimension.x, 15);
+        var scaledXYData = this.scaleY(scaledXData, dimension.y);
+        var res = Array();
+        try {
+            for (var scaledXYData_1 = __values(scaledXYData), scaledXYData_1_1 = scaledXYData_1.next(); !scaledXYData_1_1.done; scaledXYData_1_1 = scaledXYData_1.next()) {
+                var x = scaledXYData_1_1.value;
+                res.push(Math.round(x));
+            }
+        }
+        catch (e_9_1) { e_9 = { error: e_9_1 }; }
+        finally {
+            try {
+                if (scaledXYData_1_1 && !scaledXYData_1_1.done && (_a = scaledXYData_1.return)) _a.call(scaledXYData_1);
+            }
+            finally { if (e_9) throw e_9.error; }
+        }
+        return res;
+    };
+    WindowHistogram.prototype.draw = function (ctx) {
+        ctx.fillStyle = "#EEEEEE";
+        var delta = 25;
+        for (var i = 1; i < this.dimension.y / delta; i++) {
+            ctx.fillRect(this.position.x, this.position.y - delta * i, this.dimension.x, 1);
+        }
+        var rawData = this.data();
+        if (rawData.length > 0) {
+            var data = this.scale(rawData, this.dimension);
+            var scalingFactor = rawData.length / data.length;
+            var barWidth = Math.max(1, Math.floor(this.dimension.x / data.length));
+            ctx.fillStyle = "#696969";
+            for (var i = 0; i < data.length; i++) {
+                var count = data[i];
+                ctx.fillRect(this.position.x + 5 + barWidth * i, this.position.y - count, barWidth, count);
+            }
+        }
+        ctx.fillStyle = "#000";
+        // Y Axes
+        ctx.fillRect(this.position.x, this.position.y, this.dimension.x, 1);
+        ctx.beginPath();
+        ctx.moveTo(this.position.x, this.position.y - this.dimension.y);
+        ctx.lineTo(this.position.x - 5, this.position.y - this.dimension.y);
+        ctx.lineTo(this.position.x, this.position.y - this.dimension.y - 10);
+        ctx.lineTo(this.position.x + 5, this.position.y - this.dimension.y);
+        ctx.lineTo(this.position.x, this.position.y - this.dimension.y);
+        ctx.closePath();
+        ctx.fill();
+        // X Axis
+        ctx.fillRect(this.position.x, this.position.y - this.dimension.y, 1, this.dimension.y);
+        ctx.beginPath();
+        ctx.moveTo(this.position.x + this.dimension.x, this.position.y);
+        ctx.lineTo(this.position.x + this.dimension.x, this.position.y - 5);
+        ctx.lineTo(this.position.x + this.dimension.x + 10, this.position.y);
+        ctx.lineTo(this.position.x + this.dimension.x, this.position.y + 5);
+        ctx.lineTo(this.position.x + this.dimension.x, this.position.y);
+        ctx.closePath();
+        ctx.fill();
+        // numbers below the x-axis
+        var maxValue = this.maxValue();
+        var tx = this.maxValue() / 3;
+        var nbOfDigits = Math.ceil(Math.log(tx + 1) / Math.log(10));
+        var r = Math.pow(10, nbOfDigits - 1);
+        tx = Math.round(tx / r) * r;
+        for (var i = 0; i < maxValue / tx; i++) {
+            var displayedValue = i * tx;
+            var valueX = displayedValue / maxValue * this.dimension.x;
+            ctx.fillRect(this.position.x + valueX, this.position.y, 1, 3);
+            ctx.fillText(Math.round(displayedValue), this.position.x + valueX, this.position.y + 12);
+        }
+        var bucketSize = this.histograms[0].bucketSize;
+        var p10 = this.percentiles(rawData, 0.1) * bucketSize;
+        var p50 = this.percentiles(rawData, 0.5) * bucketSize;
+        var p75 = this.percentiles(rawData, 0.75) * bucketSize;
+        var p90 = this.percentiles(rawData, 0.9) * bucketSize;
+        var p99 = this.percentiles(rawData, 0.99) * bucketSize;
+        ctx.fillText('p10: ' + p10.toFixed(1), this.position.x + this.dimension.x + 10, this.position.y - this.dimension.y);
+        ctx.fillText('p50: ' + p50.toFixed(1), this.position.x + this.dimension.x + 10, this.position.y - this.dimension.y + 20);
+        ctx.fillText('p75: ' + p75.toFixed(1), this.position.x + this.dimension.x + 10, this.position.y - this.dimension.y + 2 * 20);
+        ctx.fillText('p90: ' + p90.toFixed(1), this.position.x + this.dimension.x + 10, this.position.y - this.dimension.y + 3 * 20);
+        ctx.fillText('p99: ' + p99.toFixed(1), this.position.x + this.dimension.x + 10, this.position.y - this.dimension.y + 4 * 20);
+    };
+    WindowHistogram.prototype.update = function (t) {
+        var index = Math.floor(t / this.windowMs);
+        var n = this.histograms.length;
+        if (index !== this.lastIndex) {
+            for (var j = this.lastIndex + 1; j <= index; j++) {
+                var h = this.histograms[j % n];
+                h.clear();
+            }
+            this.lastIndex = index;
+        }
+    };
+    WindowHistogram.prototype.click = function (x, y, left) {
+        return false;
+    };
+    WindowHistogram.prototype.percentiles = function (data, q) {
+        var e_10, _a;
+        var target = 0;
+        try {
+            for (var data_3 = __values(data), data_3_1 = data_3.next(); !data_3_1.done; data_3_1 = data_3.next()) {
+                var x = data_3_1.value;
+                target += x * q;
+            }
+        }
+        catch (e_10_1) { e_10 = { error: e_10_1 }; }
+        finally {
+            try {
+                if (data_3_1 && !data_3_1.done && (_a = data_3.return)) _a.call(data_3);
+            }
+            finally { if (e_10) throw e_10.error; }
+        }
+        // const target = _.sum(data) * q;
+        var sum = 0;
+        for (var i = 0; i < data.length; i++) {
+            sum = sum + data[i];
+            if (sum > target) {
+                var delta = (sum - target) / data[i];
+                return i + delta;
+            }
+        }
+        return data.length - 1;
+    };
+    return WindowHistogram;
 }(MoveableEntity));
 var Scene = /** @class */ (function () {
     function Scene(window, canvas) {
@@ -412,18 +727,19 @@ var Scene = /** @class */ (function () {
         this.ctx = canvas.getContext('2d');
         this.mouseX = 0;
         this.mouseY = 0;
+        // this.graph = 
         var elemLeft = canvas.offsetLeft + canvas.clientLeft;
         var elemTop = canvas.offsetTop + canvas.clientTop;
         canvas.addEventListener('click', function (event) {
             var x = event.pageX - elemLeft;
             var y = event.pageY - elemTop;
-            _this.click(x, y, true);
+            // this.click(x, y, true);
         }, false);
         canvas.addEventListener('contextmenu', function (event) {
             event.preventDefault();
             var x = event.pageX - elemLeft;
             var y = event.pageY - elemTop;
-            _this.click(x, y, false);
+            // this.click(x, y, false);
         }, false);
         canvas.addEventListener("mousemove", function (event) {
             _this.mouseX = event.pageX - elemLeft;
@@ -431,39 +747,43 @@ var Scene = /** @class */ (function () {
         }, false);
     }
     Scene.prototype.draw = function (ctx) {
-        var e_7, _a;
+        var e_11, _a;
         try {
             for (var _b = __values(this.entities), _c = _b.next(); !_c.done; _c = _b.next()) {
                 var entity = _c.value;
                 entity.draw(ctx);
             }
         }
-        catch (e_7_1) { e_7 = { error: e_7_1 }; }
+        catch (e_11_1) { e_11 = { error: e_11_1 }; }
         finally {
             try {
-                if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
             }
-            finally { if (e_7) throw e_7.error; }
+            finally { if (e_11) throw e_11.error; }
         }
     };
     Scene.prototype.update = function (t) {
-        var e_8, _a;
+        var e_12, _a;
         try {
             for (var _b = __values(this.entities), _c = _b.next(); !_c.done; _c = _b.next()) {
                 var entity = _c.value;
                 entity.update(t);
             }
         }
-        catch (e_8_1) { e_8 = { error: e_8_1 }; }
+        catch (e_12_1) { e_12 = { error: e_12_1 }; }
         finally {
             try {
-                if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
             }
-            finally { if (e_8) throw e_8.error; }
+            finally { if (e_12) throw e_12.error; }
         }
     };
-    Scene.prototype.click = function (x, y, left) {
-        var e_9, _a;
+    Scene.prototype.click = function () {
+        var e_13, _a;
+        // click(x: number, y: number, left: boolean): void {
+        var x = 0;
+        var y = 0;
+        var left = true;
         try {
             for (var _b = __values(this.entities), _c = _b.next(); !_c.done; _c = _b.next()) {
                 var entity = _c.value;
@@ -474,19 +794,19 @@ var Scene = /** @class */ (function () {
                 }
             }
         }
-        catch (e_9_1) { e_9 = { error: e_9_1 }; }
+        catch (e_13_1) { e_13 = { error: e_13_1 }; }
         finally {
             try {
-                if (_c && !_c.done && (_a = _b["return"])) _a.call(_b);
+                if (_c && !_c.done && (_a = _b.return)) _a.call(_b);
             }
-            finally { if (e_9) throw e_9.error; }
+            finally { if (e_13) throw e_13.error; }
         }
     };
     Scene.prototype.add = function (entity) {
         this.entities.add(entity);
     };
     Scene.prototype.remove = function (entity) {
-        this.entities["delete"](entity);
+        this.entities.delete(entity);
     };
     Scene.prototype.loop = function () {
         var _this = this;
@@ -495,7 +815,9 @@ var Scene = /** @class */ (function () {
         var t = Date.now();
         this.ctx.clearRect(0, 0, w, h);
         this.update(t);
+        // this.graph.update(t)
         this.draw(this.ctx);
+        // this.graph.draw(this.ctx)
         this.ctx.font = '12px sans-serif';
         this.ctx.fillText('(' + this.mouseX + ', ' + this.mouseY + ')', 5, 20);
         this.window.requestAnimationFrame(function () { _this.loop(); });

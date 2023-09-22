@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+     <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+     <title>Load shedding</title>
+     <style>
+         body,
+         html {
+             margin: 0;
+             padding: 0;
+         }
+
+         canvas {
+             background-color: #ffffff;
+         }
+     </style>
+ </head>
+
+ <body>
+     <canvas />
+     <!-- <script src="./Scene.js"></script> -->
+     <!-- <script src="modules/Scene.js"></script> -->
+     <script src="lodash.js"> </script>
+     <script src="main.js"></script>
+     <script >
+        let canvas = document.querySelector('canvas');
+        let ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const w = canvas.width;
+        const h = canvas.height;
+
+        const scene = new Scene(window, canvas);
+
+        config.clientRpsDistribution = 'poisson'
+        config.serverProcessingLatencyMs = 500;
+        config.loadBalancingAlgo = 'roundrobin'
+        config.networkSpeedMs = 1000
+        changeRps(10);
+
+        //
+        function next0() {
+            config.realLife = true;
+            for (let i=0; i<2; i++) {
+                servers[i].latencyMs = 2000;
+                servers[i].color = "#C00";
+            }
+            changeRps(9);
+            console.log("Slow servers")
+        }
+
+        function next2() {
+            changeRps(0.1)
+        }
+
+        function next3() {
+            for (let i=0; i<3; i++) {
+                addClient(5);
+                changeRps(2);
+            }
+            console.log("Wave phenomenon")
+        }
+
+        function next4() {
+            for (let src of sources) {
+                src.stop()
+            }
+            sources = []
+            for (let client of clients) {
+                setTimeout(() => {
+                    let src = new Source('poisson', config.clientRps, () => {
+                        client.send();
+                    })
+                    sources.push(src);
+                }, Math.random() * 1000);
+            }
+            console.log("Non coordination of clients lead to random load-balancing")
+        }
+
+        let index = 0;
+        const steps = [next0, next2, next3, next4];
+        function next() {
+            if (index >= steps.length) {
+                console.log("no more steps!");
+                return;
+            }
+            steps[index]();
+            index++;
+        }
+
+        setup(scene, 1, 10);
+        scene.loop();
+     </script>
+ </body>
+ </html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+     <head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+     <title>Load shedding</title>
+     <style>
+         body,
+         html {
+             margin: 0;
+             padding: 0;
+         }
+
+         canvas {
+             background-color: #ffffff;
+         }
+     </style>
+ </head>
+
+ <body>
+     <canvas />
+     <!-- <script src="./Scene.js"></script> -->
+     <!-- <script src="modules/Scene.js"></script> -->
+     <script src="lodash.js"> </script>
+     <script src="main.js"></script>
+     <script >
+        let canvas = document.querySelector('canvas');
+        let ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const w = canvas.width;
+        const h = canvas.height;
+
+        const scene = new Scene(window, canvas);
+
+        config.clientRpsDistribution = 'poisson'
+        config.serverProcessingLatencyMs = 500;
+        config.loadBalancingAlgo = 'random'
+        config.networkSpeedMs = 1500
+        changeRps(15);
+
+        //
+        function next0() {
+            config.loadBalancingAlgo = 'leastloaded'
+        }
+
+        function next2() {
+            addServer();
+            addServer();
+            for (let i=servers.length - 2; i<servers.length; i++) {
+                servers[i].latencyMs = 5000;
+                servers[i].color = "#C00";
+            }
+            console.log("Thundering herd")
+            setTimeout(() => {
+                for (let i=servers.length - 2; i<servers.length; i++) {
+                    servers[i].latencyMs = config.serverProcessingLatencyMs;
+                    servers[i].color = undefined;
+                }
+            }, 10000)
+        }
+
+        let index = 0;
+        const steps = [next0, next2];
+        function next() {
+            if (index >= steps.length) {
+                console.log("no more steps!");
+                return;
+            }
+            steps[index]();
+            index++;
+        }
+
+        setup(scene, 1, 8);
+        scene.loop();
+     </script>
+ </body>
+ </html>

@@ -424,7 +424,7 @@ class Layer extends MoveableEntity {
     }
 
     pop(): Entity | undefined {
-        let res = undefined
+        let res: Entity | undefined = undefined
         for (let entity of this.entities) {
             this.remove(entity)
             res = entity
@@ -434,34 +434,83 @@ class Layer extends MoveableEntity {
     }
 }
 
-
 class Histogram {
-    constructor() {
-        
+    bucketSize: number
+    max: number
+    buffer: number[]
+    maxCount: number
+    maxValue: number
+
+    constructor(bucketSize: number, maxValue: number) {
+        this.bucketSize = bucketSize;
+        const size = Math.floor(maxValue / bucketSize);
+        this.max = size * bucketSize;
+        this.buffer = new Array(size);
+        for (let i = 0; i < size; i++) {
+            this.buffer[i] = 0;
+        }
+        this.maxCount = 0;
+        this.maxValue = 0;
+    }
+    add(x: number) {
+        if (x > this.max) {
+            return;
+        }
+        const i = Math.floor(x / this.bucketSize);
+        this.buffer[i] = this.buffer[i] + 1;
+        this.maxCount = Math.max(this.maxCount, this.buffer[i]);
+        this.maxValue = Math.max(this.maxValue, i);
+    }
+    clear() {
+        for (let i = 0; i < this.buffer.length; i++) {
+            this.buffer[i] = 0;
+        }
+        this.maxCount = 0;
+        this.maxValue = 0;
+    }
+    merge(other: Histogram) {
+        const result = new Histogram(this.bucketSize, this.max);
+        for (let i=0; i<result.buffer.length; i++) {
+            result.buffer[i] = this.buffer[i] + other.buffer[i];
+        }
+        return result;
     }
 }
 
-class WindowHistogram extends MoveableEntity {
-    histograms: []
+class Dimension {
+    x: number
+    y: number
+}
 
-    constructor(w: number, h: number) {
+class WindowHistogram extends MoveableEntity {
+    histograms: Histogram[]
+    windowMs: number
+    count: number
+    lastIndex: number
+    position: Dimension
+    dimension: Dimension
+    p99: number
+    clock = Date.now
+
+    constructor(w: number, h: number, windowMs: number, position: Dimension, dimension: Dimension) {
         super(w, h)
         // super(scene, opts.position.x, opts.position.y);
         // histogramFactory, count, windowMs, position, dimension, clock
         this.histograms = [];
         const count = 10
         for (let i = 0; i < count; i++) {
-            this.histograms.push(new Histogram());
+            this.histograms.push(new Histogram(10, 12));
         }
-        this.windowMs = opts.windowMs;
-        this.clock = opts.clock || Date.now;
+        this.windowMs = windowMs;
+        // this.clock = opts.clock || Date.now;
         this.count = count;
         this.lastIndex = Math.floor(this.clock() / this.windowMs);
-        this.position = opts.position;
-        this.dimension = opts.dimension;
+        this.position = position;
+        this.dimension = dimension;
         this.p99 = 0;
     }
-    add(x: number) {
+
+    add(x: number): void {
         if (isNaN(x)) {
             return;
         }
@@ -478,33 +527,34 @@ class WindowHistogram extends MoveableEntity {
         const i = (index % n) >> 0;
         this.histograms[i].add(x);
     }
-    maxIndividualCount() {
+
+    maxIndividualCount(): number {
         let count = 0;
         for (let i = 0; i < this.histograms.length; i++) {
             count = Math.max(count, this.histograms[i].maxCount);
         }
         return count;
     }
-    maxCount() {
+    maxCount(): number {
         let count = 0;
         for (let i = 0; i < this.histograms[0].buffer.length; i++) {
             count = Math.max(count, this.buffer(i) || 0);
         }
         return count || 0;
     }
-    maxValue() {
+    maxValue(): number {
         let value = 0;
         for (let i = 0; i < this.histograms.length; i++) {
             value = Math.max(value, this.histograms[i].maxValue);
         }
         return value;
     }
-    clear() {
+    clear(): void {
         for (let i = 0; i < this.histograms.length; i++) {
             this.histograms[i].clear();
         }
     }
-    buffer(index) {
+    buffer(index: number): number {
         let count = 0;
         for (let i = 0; i < this.histograms.length; i++) {
             const histo = this.histograms[i];
@@ -513,7 +563,7 @@ class WindowHistogram extends MoveableEntity {
 
         return count;
     }
-    data() {
+    data(): number[] {
         const n = this.maxValue() + 1;
         let result = new Array(n);
         for (let i = 0; i < result.length; i++) {
@@ -522,7 +572,7 @@ class WindowHistogram extends MoveableEntity {
 
         return result;
     }
-    scaleX(data, width, minWidth) {
+    scaleX(data: number[], width: number, minWidth: number): number[] {
         const n = Math.floor(width / minWidth);
         const scaledData = new Array(n);
         const targetCredit = data.length / n;
@@ -558,17 +608,28 @@ class WindowHistogram extends MoveableEntity {
 
         return scaledData;
     }
-    scaleY(data, height) {
-        const maxCount = _.max(data);
+    scaleY(data: number[], height: number) {
+        let maxCount = 0;
+        for (let x of data) {
+            maxCount = Math.max(maxCount, x);
+        }
         const hFactor = height / maxCount;
-        return _.map(data, x => { return x * hFactor; });
+        let res: number[] = Array();
+        for (let x of data) {
+            res.push(x * hFactor);
+        }
+        return res;
     }
-    scale(data, dimension) {
+    scale(data: number[], dimension: Dimension) {
         const scaledXData = this.scaleX(data, dimension.x, 15);
         const scaledXYData = this.scaleY(scaledXData, dimension.y);
-        return _.map(scaledXYData, Math.round);
+        let res: number[] = Array()
+        for (let x of scaledXYData) {
+            res.push(Math.round(x))
+        }
+        return res;
     }
-    draw(ctx) {
+    draw(ctx: any) {
         ctx.fillStyle = "#EEEEEE";
         const delta = 25;
         for (let i=1; i<this.dimension.y/delta; i++) {
@@ -637,7 +698,7 @@ class WindowHistogram extends MoveableEntity {
         ctx.fillText('p90: ' + p90.toFixed(1), this.position.x + this.dimension.x + 10, this.position.y - this.dimension.y + 3*20);
         ctx.fillText('p99: ' + p99.toFixed(1), this.position.x + this.dimension.x + 10, this.position.y - this.dimension.y + 4*20);
     }
-    update(t) {
+    update(t: number) {
         const index = Math.floor(t / this.windowMs)
         const n = this.histograms.length;
         if (index !== this.lastIndex) {
@@ -648,8 +709,15 @@ class WindowHistogram extends MoveableEntity {
             this.lastIndex = index;
         }
     }
-    percentiles(data, q) {
-        const target = _.sum(data) * q;
+    click(x: number, y: number, left: boolean): boolean {
+        return false
+    }
+    percentiles(data: number[], q: number) {
+        let target = 0
+        for (let x of data) {
+            target += x * q
+        }
+        // const target = _.sum(data) * q;
         let sum = 0;
         for (let i=0; i<data.length; i++) {
             sum = sum + data[i];
@@ -667,7 +735,7 @@ class Scene implements Drawable {
     window: any
     canvas: any
     ctx: any
-    graph: Drawable
+    // graph: Drawable
 
     mouseX: number
     mouseY: number
@@ -678,6 +746,7 @@ class Scene implements Drawable {
         this.ctx = canvas.getContext('2d')
         this.mouseX = 0
         this.mouseY = 0
+        // this.graph = 
 
         const elemLeft = canvas.offsetLeft + canvas.clientLeft
         const elemTop = canvas.offsetTop + canvas.clientTop
@@ -686,7 +755,7 @@ class Scene implements Drawable {
             const x = event.pageX - elemLeft;
             const y = event.pageY - elemTop;
 
-            this.click(x, y, true);
+            // this.click(x, y, true);
         }, false);
 
         canvas.addEventListener('contextmenu', (event: { preventDefault: () => void; pageX: number; pageY: number }) => {
@@ -694,7 +763,7 @@ class Scene implements Drawable {
             const x = event.pageX - elemLeft;
             const y = event.pageY - elemTop;
 
-            this.click(x, y, false);
+            // this.click(x, y, false);
         }, false);
 
         canvas.addEventListener("mousemove", (event: { pageX: number; pageY: number }) => {
@@ -715,7 +784,11 @@ class Scene implements Drawable {
         }
     }
 
-    click(x: number, y: number, left: boolean): void {
+    click(): void {
+    // click(x: number, y: number, left: boolean): void {
+        let x = 0
+        let y = 0
+        let left = true
         for (let entity of this.entities) {
             if (entity.isInside(x, y)) {
                 if (entity.click(x, y, left)) {
@@ -739,9 +812,9 @@ class Scene implements Drawable {
         const t = Date.now()
         this.ctx.clearRect(0, 0, w, h)
         this.update(t)
-        this.graph.update(t)
+        // this.graph.update(t)
         this.draw(this.ctx)
-        this.graph.draw(this.ctx)
+        // this.graph.draw(this.ctx)
         this.ctx.font = '12px sans-serif';
         this.ctx.fillText('(' + this.mouseX + ', ' + this.mouseY + ')', 5, 20);
         this.window.requestAnimationFrame(() => { this.loop() })
